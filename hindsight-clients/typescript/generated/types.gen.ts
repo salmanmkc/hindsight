@@ -3655,6 +3655,48 @@ export type ClearObservationsResponses = {
 export type ClearObservationsResponse =
   ClearObservationsResponses[keyof ClearObservationsResponses];
 
+export type ClearMemoryObservationsData = {
+  body?: never;
+  headers?: {
+    /**
+     * Authorization
+     */
+    authorization?: string | null;
+  };
+  path: {
+    /**
+     * Bank Id
+     */
+    bank_id: string;
+    /**
+     * Memory Id
+     */
+    memory_id: string;
+  };
+  query?: never;
+  url: "/v1/default/banks/{bank_id}/memories/{memory_id}/observations";
+};
+
+export type ClearMemoryObservationsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ClearMemoryObservationsError =
+  ClearMemoryObservationsErrors[keyof ClearMemoryObservationsErrors];
+
+export type ClearMemoryObservationsResponses = {
+  /**
+   * Successful Response
+   */
+  200: DeleteResponse;
+};
+
+export type ClearMemoryObservationsResponse =
+  ClearMemoryObservationsResponses[keyof ClearMemoryObservationsResponses];
+
 export type ResetBankConfigData = {
   body?: never;
   headers?: {
