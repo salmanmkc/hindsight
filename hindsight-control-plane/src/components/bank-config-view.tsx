@@ -530,15 +530,18 @@ export function BankConfigView() {
             label="Restrict tools"
             description="When off, all tools are available. When on, only the selected tools can be invoked for this bank."
           >
-            <div className="flex justify-end">
-              <Toggle
-                value={mcpEdits.mcp_enabled_tools !== null}
-                onChange={(restricted) =>
+            <div className="flex items-center gap-2 justify-end">
+              <Switch
+                checked={mcpEdits.mcp_enabled_tools !== null}
+                onCheckedChange={(restricted) =>
                   setMcpEdits({
                     mcp_enabled_tools: restricted ? [...ALL_TOOLS] : null,
                   })
                 }
               />
+              <Label className="text-xs text-muted-foreground">
+                {mcpEdits.mcp_enabled_tools !== null ? "Enabled" : "Disabled"}
+              </Label>
             </div>
           </FieldRow>
           {mcpEdits.mcp_enabled_tools !== null && (
