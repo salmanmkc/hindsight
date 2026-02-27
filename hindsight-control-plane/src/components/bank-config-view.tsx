@@ -14,7 +14,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Loader2, AlertCircle, Plus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -36,6 +39,20 @@ type RetainEdits = {
 type ObservationsEdits = {
   enable_observations: boolean | null;
   observations_mission: string | null;
+};
+
+type LabelValue = { value: string; description: string };
+type LabelGroup = {
+  key: string;
+  description: string;
+  multi_value: boolean;
+  optional: boolean;
+  values: LabelValue[];
+};
+
+type EntityLabelsEdits = {
+  entity_labels: LabelGroup[] | null;
+  retain_free_form_entities: boolean;
 };
 
 type MCPEdits = {
@@ -96,6 +113,20 @@ function observationsSlice(config: Record<string, any>): ObservationsEdits {
   };
 }
 
+function entityLabelsSlice(config: Record<string, any>): EntityLabelsEdits {
+  const raw = config.entity_labels;
+  let attrs: LabelGroup[] | null = null;
+  if (Array.isArray(raw)) {
+    attrs = raw as LabelGroup[];
+  } else if (raw && typeof raw === "object" && Array.isArray(raw.attributes)) {
+    attrs = raw.attributes as LabelGroup[];
+  }
+  return {
+    entity_labels: attrs,
+    retain_free_form_entities: config.retain_free_form_entities ?? true,
+  };
+}
+
 function mcpSlice(config: Record<string, any>): MCPEdits {
   return {
     mcp_enabled_tools: config.mcp_enabled_tools ?? null,
@@ -124,16 +155,21 @@ export function BankConfigView() {
   const [observationsEdits, setObservationsEdits] = useState<ObservationsEdits>(
     observationsSlice({})
   );
+  const [entityLabelsEdits, setEntityLabelsEdits] = useState<EntityLabelsEdits>(
+    entityLabelsSlice({})
+  );
   const [reflectEdits, setReflectEdits] = useState<ProfileData>(DEFAULT_PROFILE);
   const [mcpEdits, setMcpEdits] = useState<MCPEdits>(mcpSlice({}));
 
   // Per-section saving/error state
   const [retainSaving, setRetainSaving] = useState(false);
   const [observationsSaving, setObservationsSaving] = useState(false);
+  const [entityLabelsSaving, setEntityLabelsSaving] = useState(false);
   const [reflectSaving, setReflectSaving] = useState(false);
   const [mcpSaving, setMcpSaving] = useState(false);
   const [retainError, setRetainError] = useState<string | null>(null);
   const [observationsError, setObservationsError] = useState<string | null>(null);
+  const [entityLabelsError, setEntityLabelsError] = useState<string | null>(null);
   const [reflectError, setReflectError] = useState<string | null>(null);
   const [mcpError, setMcpError] = useState<string | null>(null);
 
@@ -147,6 +183,10 @@ export function BankConfigView() {
   const observationsDirty = useMemo(
     () => JSON.stringify(observationsEdits) !== JSON.stringify(observationsSlice(baseConfig)),
     [observationsEdits, baseConfig]
+  );
+  const entityLabelsDirty = useMemo(
+    () => JSON.stringify(entityLabelsEdits) !== JSON.stringify(entityLabelsSlice(baseConfig)),
+    [entityLabelsEdits, baseConfig]
   );
   const reflectDirty = useMemo(
     () => JSON.stringify(reflectEdits) !== JSON.stringify(baseProfile),
@@ -182,6 +222,7 @@ export function BankConfigView() {
       setBaseProfile(prof);
       setRetainEdits(retainSlice(cfg));
       setObservationsEdits(observationsSlice(cfg));
+      setEntityLabelsEdits(entityLabelsSlice(cfg));
       setReflectEdits(prof);
       setMcpEdits(mcpSlice(cfg));
     } catch (err) {
@@ -216,6 +257,24 @@ export function BankConfigView() {
       setObservationsError(err.message || "Failed to save observations settings");
     } finally {
       setObservationsSaving(false);
+    }
+  };
+
+  const saveEntityLabels = async () => {
+    if (!bankId) return;
+    setEntityLabelsSaving(true);
+    setEntityLabelsError(null);
+    try {
+      const payload = {
+        entity_labels: entityLabelsEdits.entity_labels,
+        retain_free_form_entities: entityLabelsEdits.retain_free_form_entities,
+      };
+      await client.updateBankConfig(bankId, payload);
+      setBaseConfig((prev) => ({ ...prev, ...payload }));
+    } catch (err: any) {
+      setEntityLabelsError(err.message || "Failed to save entity labels settings");
+    } finally {
+      setEntityLabelsSaving(false);
     }
   };
 
@@ -340,6 +399,46 @@ export function BankConfigView() {
           )}
         </ConfigSection>
 
+        {/* Entity Labels Section */}
+        <ConfigSection
+          title="Entity Labels"
+          description="Define a controlled vocabulary of key:value classification labels extracted at retain time (e.g. pedagogy:scaffolding, interest:active)"
+          error={entityLabelsError}
+          dirty={entityLabelsDirty}
+          saving={entityLabelsSaving}
+          onSave={saveEntityLabels}
+        >
+          <FieldRow
+            label="Entities"
+            description="Extract regular named entities (people, places, concepts) in addition to entity labels. Disable to restrict extraction to entity labels only."
+          >
+            <div className="flex justify-end items-center gap-2">
+              <Label
+                htmlFor="retain-free-form-entities"
+                className="text-sm text-muted-foreground cursor-pointer select-none"
+              >
+                {entityLabelsEdits.retain_free_form_entities ? "Enabled" : "Disabled"}
+              </Label>
+              <Switch
+                id="retain-free-form-entities"
+                checked={entityLabelsEdits.retain_free_form_entities}
+                onCheckedChange={(v) =>
+                  setEntityLabelsEdits((prev) => ({ ...prev, retain_free_form_entities: v }))
+                }
+              />
+            </div>
+          </FieldRow>
+          <EntityLabelsEditor
+            value={entityLabelsEdits.entity_labels ?? []}
+            onChange={(attrs) =>
+              setEntityLabelsEdits((prev) => ({
+                ...prev,
+                entity_labels: attrs.length > 0 ? attrs : null,
+              }))
+            }
+          />
+        </ConfigSection>
+
         {/* Observations Section */}
         <ConfigSection
           title="Observations"
@@ -354,9 +453,9 @@ export function BankConfigView() {
             description="Enable automatic consolidation of facts into observations"
           >
             <div className="flex justify-end">
-              <Toggle
-                value={observationsEdits.enable_observations ?? false}
-                onChange={(v) =>
+              <Switch
+                checked={observationsEdits.enable_observations ?? false}
+                onCheckedChange={(v) =>
                   setObservationsEdits((prev) => ({ ...prev, enable_observations: v }))
                 }
               />
@@ -713,22 +812,190 @@ function TraitRow({
   );
 }
 
-// ─── Toggle ───────────────────────────────────────────────────────────────────
+// ─── EntityLabelsEditor ───────────────────────────────────────────────────────
 
-function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+function emptyAttribute(): LabelGroup {
+  return { key: "", description: "", multi_value: false, optional: true, values: [] };
+}
+
+function emptyValue(): LabelValue {
+  return { value: "", description: "" };
+}
+
+function EntityLabelsEditor({
+  value,
+  onChange,
+}: {
+  value: LabelGroup[];
+  onChange: (attrs: LabelGroup[]) => void;
+}) {
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
+
+  const updateAttr = (i: number, patch: Partial<LabelGroup>) => {
+    const next = value.map((a, idx) => (idx === i ? { ...a, ...patch } : a));
+    onChange(next);
+  };
+
+  const removeAttr = (i: number) => {
+    onChange(value.filter((_, idx) => idx !== i));
+    setExpanded((prev) => {
+      const next = { ...prev };
+      delete next[i];
+      return next;
+    });
+  };
+
+  const addAttr = () => {
+    const next = [...value, emptyAttribute()];
+    onChange(next);
+    setExpanded((prev) => ({ ...prev, [next.length - 1]: true }));
+  };
+
+  const updateVal = (attrIdx: number, valIdx: number, patch: Partial<LabelValue>) => {
+    const newValues = value[attrIdx].values.map((v, vi) =>
+      vi === valIdx ? { ...v, ...patch } : v
+    );
+    updateAttr(attrIdx, { values: newValues });
+  };
+
+  const removeVal = (attrIdx: number, valIdx: number) => {
+    updateAttr(attrIdx, { values: value[attrIdx].values.filter((_, vi) => vi !== valIdx) });
+  };
+
+  const addVal = (attrIdx: number) => {
+    updateAttr(attrIdx, { values: [...value[attrIdx].values, emptyValue()] });
+  };
+
   return (
-    <button
-      type="button"
-      onClick={() => onChange(!value)}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-        value ? "bg-primary" : "bg-muted"
-      }`}
-    >
-      <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-          value ? "translate-x-6" : "translate-x-1"
-        }`}
-      />
-    </button>
+    <div className="px-6 py-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium">Entity Labels</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Classification labels extracted at retain time. Leave empty to disable.
+          </p>
+        </div>
+        {value.length > 0 && (
+          <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full shrink-0">
+            {value.length} group{value.length !== 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+
+      {value.length === 0 && (
+        <p className="text-xs text-muted-foreground italic">No attributes defined.</p>
+      )}
+
+      <div className="space-y-2">
+        {value.map((attr, i) => {
+          const isOpen = expanded[i] ?? false;
+          return (
+            <div key={i} className="border border-border/50 rounded-md bg-background">
+              {/* Attribute header */}
+              <div className="flex items-center gap-2 px-3 py-2">
+                <button
+                  type="button"
+                  onClick={() => setExpanded((prev) => ({ ...prev, [i]: !isOpen }))}
+                  className="text-muted-foreground hover:text-foreground shrink-0"
+                >
+                  {isOpen ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </button>
+                <Input
+                  placeholder="key (e.g. pedagogy)"
+                  value={attr.key}
+                  onChange={(e) => updateAttr(i, { key: e.target.value })}
+                  className="h-8 text-xs font-mono w-36 shrink-0"
+                />
+                <Input
+                  placeholder="description"
+                  value={attr.description}
+                  onChange={(e) => updateAttr(i, { description: e.target.value })}
+                  className="h-8 text-xs flex-1 min-w-0"
+                />
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 cursor-pointer select-none">
+                  <Checkbox
+                    id={`multi-${i}`}
+                    checked={attr.multi_value}
+                    onCheckedChange={(checked) => updateAttr(i, { multi_value: !!checked })}
+                    className="h-4 w-4"
+                  />
+                  multi
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 cursor-pointer select-none">
+                  <Checkbox
+                    id={`optional-${i}`}
+                    checked={attr.optional}
+                    onCheckedChange={(checked) => updateAttr(i, { optional: !!checked })}
+                    className="h-4 w-4"
+                    disabled={attr.multi_value}
+                  />
+                  optional
+                </label>
+                <button
+                  type="button"
+                  onClick={() => removeAttr(i)}
+                  className="text-muted-foreground hover:text-destructive shrink-0"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {/* Values list */}
+              {isOpen && (
+                <div className="px-3 pb-3 space-y-1 border-t border-border/30 pt-2">
+                  {attr.values.length === 0 && (
+                    <p className="text-xs text-muted-foreground italic pl-5">No values yet.</p>
+                  )}
+                  {attr.values.map((v, vi) => (
+                    <div key={vi} className="flex items-center gap-2 pl-5">
+                      <Input
+                        placeholder="value"
+                        value={v.value}
+                        onChange={(e) => updateVal(i, vi, { value: e.target.value })}
+                        className="h-8 text-xs font-mono w-32 shrink-0"
+                      />
+                      <Input
+                        placeholder="description"
+                        value={v.description}
+                        onChange={(e) => updateVal(i, vi, { description: e.target.value })}
+                        className="h-8 text-xs flex-1 min-w-0"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeVal(i, vi)}
+                        className="text-muted-foreground hover:text-destructive shrink-0"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => addVal(i)}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground pl-5 mt-1"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Add value
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <button
+        type="button"
+        onClick={addAttr}
+        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        Add attribute
+      </button>
+    </div>
   );
 }
