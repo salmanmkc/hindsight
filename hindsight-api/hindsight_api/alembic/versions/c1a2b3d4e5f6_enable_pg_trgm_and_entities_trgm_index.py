@@ -1,7 +1,7 @@
 """Enable pg_trgm extension and add GIN trigram index on entities.canonical_name
 
-Revision ID: a2b3c4d5e6f7
-Revises: z1u2v3w4x5y6
+Revision ID: c1a2b3d4e5f6
+Revises: b4c5d6e7f8a9
 Create Date: 2026-03-02
 """
 
@@ -9,8 +9,8 @@ from collections.abc import Sequence
 
 from alembic import context, op
 
-revision: str = "a2b3c4d5e6f7"
-down_revision: str | Sequence[str] | None = "z1u2v3w4x5y6"
+revision: str = "c1a2b3d4e5f6"
+down_revision: str | Sequence[str] | None = "b4c5d6e7f8a9"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

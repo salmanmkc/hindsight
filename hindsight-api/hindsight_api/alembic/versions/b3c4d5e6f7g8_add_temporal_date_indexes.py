@@ -1,7 +1,7 @@
 """Add partial indexes on memory_units temporal date fields for fast temporal retrieval
 
 Revision ID: b3c4d5e6f7g8
-Revises: a2b3c4d5e6f7
+Revises: c1a2b3d4e5f6
 Create Date: 2026-03-02
 
 The temporal retrieval entry-point query filters memory_units by occurred_start,
@@ -19,7 +19,7 @@ from collections.abc import Sequence
 from alembic import context, op
 
 revision: str = "b3c4d5e6f7g8"
-down_revision: str | Sequence[str] | None = "a2b3c4d5e6f7"
+down_revision: str | Sequence[str] | None = "c1a2b3d4e5f6"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
