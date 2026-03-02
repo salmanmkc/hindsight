@@ -441,6 +441,7 @@ SCALES = {
     "small": 2_000,
     "medium": 10_000,
     "large": 33_000,
+    "very-large": 100_000,
 }
 
 # ---------------------------------------------------------------------------
@@ -647,6 +648,7 @@ async def cmd_generate(bank_id: str, scale: str, workers: int = 16) -> None:
         poll_interval_ms=200,
         max_slots=workers,
         consolidation_max_slots=0,
+        max_retries=20,
     )
     poller_task = asyncio.create_task(poller.run())
     console.print("  Worker     : started\n")
@@ -900,7 +902,7 @@ def main() -> None:
     gen = sub.add_parser("generate", help="Populate a synthetic bank")
     gen.add_argument("--bank-id", required=True)
     gen.add_argument("--scale", choices=list(SCALES), default="small")
-    gen.add_argument("--workers", type=int, default=16, help="Max concurrent worker slots (default: 16)")
+    gen.add_argument("--workers", type=int, default=8, help="Max concurrent worker slots (default: 8)")
 
     # benchmark
     bm = sub.add_parser("benchmark", help="Run recall and report latency")

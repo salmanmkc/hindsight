@@ -552,81 +552,45 @@ async def create_semantic_links_batch(
 
         import numpy as np
 
-        # Fetch ALL existing units with embeddings in ONE query
-        fetch_start = time_mod.time()
-        all_existing = await conn.fetch(
-            f"""
-            SELECT id, embedding
-            FROM {fq_table("memory_units")}
-            WHERE bank_id = $1
-              AND embedding IS NOT NULL
-              AND id::text != ALL($2)
-            """,
-            bank_id,
-            unit_ids,
-        )
-        _log(
-            log_buffer,
-            f"      [8.1] Fetch {len(all_existing)} existing embeddings (1 query): {time_mod.time() - fetch_start:.3f}s",
-        )
-
-        # Convert to numpy for vectorized similarity computation
-        compute_start = time_mod.time()
+        # Use pgvector ANN search (HNSW index) for each new unit instead of fetching
+        # all existing embeddings into Python. At large scale (100K+ units) the old
+        # approach would transfer 100K × 384 floats (~150 MB) per retain call; the
+        # ANN query completes in <5 ms and transfers only top_k rows.
+        ann_start = time_mod.time()
         all_links = []
 
-        if all_existing:
-            # Convert existing embeddings to numpy array
-            existing_ids = [str(row["id"]) for row in all_existing]
-            # Stack embeddings as 2D array: (num_embeddings, embedding_dim)
-            embedding_arrays = []
-            for row in all_existing:
-                raw_emb = row["embedding"]
-                # Handle different pgvector formats
-                if isinstance(raw_emb, str):
-                    # Parse string format: "[1.0, 2.0, ...]"
-                    import json
+        # Build UUID exclude list once for all ANN queries
+        import uuid as uuid_mod
 
-                    emb = np.array(json.loads(raw_emb), dtype=np.float32)
-                elif isinstance(raw_emb, (list, tuple)):
-                    emb = np.array(raw_emb, dtype=np.float32)
-                else:
-                    # Try direct conversion (works for numpy arrays, pgvector objects, etc.)
-                    emb = np.array(raw_emb, dtype=np.float32)
+        exclude_uuids = [uuid_mod.UUID(uid) if isinstance(uid, str) else uid for uid in unit_ids]
 
-                # Ensure it's 1D
-                if emb.ndim != 1:
-                    raise ValueError(f"Expected 1D embedding, got shape {emb.shape}")
-                embedding_arrays.append(emb)
+        for unit_id, new_embedding in zip(unit_ids, embeddings):
+            emb_str = str(list(new_embedding) if not isinstance(new_embedding, list) else new_embedding)
+            rows = await conn.fetch(
+                f"""
+                SELECT id::text,
+                       1 - (embedding <=> $1::vector) AS similarity
+                FROM {fq_table("memory_units")}
+                WHERE bank_id = $2
+                  AND embedding IS NOT NULL
+                  AND id != ALL($3::uuid[])
+                ORDER BY embedding <=> $1::vector
+                LIMIT $4
+                """,
+                emb_str,
+                bank_id,
+                exclude_uuids,
+                top_k,
+            )
+            for row in rows:
+                sim = float(min(1.0, max(0.0, row["similarity"])))
+                if sim >= threshold:
+                    all_links.append((unit_id, str(row["id"]), "semantic", sim, None))
 
-            if not embedding_arrays:
-                existing_embeddings = np.array([])
-            elif len(embedding_arrays) == 1:
-                # Single embedding: reshape to (1, dim)
-                existing_embeddings = embedding_arrays[0].reshape(1, -1)
-            else:
-                # Multiple embeddings: vstack
-                existing_embeddings = np.vstack(embedding_arrays)
-
-            # For each new unit, compute similarities with ALL existing units
-            for unit_id, new_embedding in zip(unit_ids, embeddings):
-                new_emb_array = np.array(new_embedding)
-
-                # Compute cosine similarities (dot product for normalized vectors)
-                similarities = np.dot(existing_embeddings, new_emb_array)
-
-                # Find top-k above threshold
-                # Get indices of similarities above threshold
-                above_threshold = np.where(similarities >= threshold)[0]
-
-                if len(above_threshold) > 0:
-                    # Sort by similarity (descending) and take top-k
-                    sorted_indices = above_threshold[np.argsort(-similarities[above_threshold])][:top_k]
-
-                    for idx in sorted_indices:
-                        similar_id = existing_ids[idx]
-                        # Clamp to [0, 1] to handle floating point precision issues
-                        similarity = float(min(1.0, max(0.0, similarities[idx])))
-                        all_links.append((unit_id, similar_id, "semantic", similarity, None))
+        _log(
+            log_buffer,
+            f"      [8.1] ANN search for {len(unit_ids)} new units → {len(all_links)} candidate links: {time_mod.time() - ann_start:.3f}s",
+        )
 
         # Also compute similarities WITHIN the new batch (new units to each other)
         # Apply the same top_k limit per unit as we do for existing units
@@ -658,7 +622,7 @@ async def create_semantic_links_batch(
 
         _log(
             log_buffer,
-            f"      [8.2] Compute similarities & generate {len(all_links)} semantic links: {time_mod.time() - compute_start:.3f}s",
+            f"      [8.2] Within-batch similarities added {len(all_links)} total semantic links",
         )
 
         if all_links:
