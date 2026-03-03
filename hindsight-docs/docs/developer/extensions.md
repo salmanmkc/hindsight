@@ -122,7 +122,6 @@ class JwtTenantExtension(TenantExtension):
         token = context.api_key
         if not token:
             # Optional headers dict is forwarded in HTTP/MCP error responses
-            # (e.g., WWW-Authenticate for OAuth discovery)
             raise AuthenticationError("Bearer token required")
 
         try:
@@ -135,12 +134,12 @@ class JwtTenantExtension(TenantExtension):
             raise AuthenticationError(str(e))
 ```
 
-`AuthenticationError` accepts an optional `headers` dict that is forwarded in both HTTP and MCP error responses. This is useful for returning `WWW-Authenticate` headers for OAuth discovery:
+`AuthenticationError` accepts an optional `headers` dict that is forwarded in both HTTP and MCP error responses. This is useful for returning custom headers like `WWW-Authenticate`:
 
 ```python
 raise AuthenticationError(
     "Authorization required",
-    headers={"WWW-Authenticate": 'Bearer resource_metadata="https://example.com/.well-known/oauth-protected-resource"'},
+    headers={"WWW-Authenticate": 'Bearer realm="example"'},
 )
 ```
 
