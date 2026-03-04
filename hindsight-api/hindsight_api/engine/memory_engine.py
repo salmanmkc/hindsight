@@ -1073,7 +1073,7 @@ class MemoryEngine(MemoryEngineInterface):
         schema: str | None = None,
     ) -> None:
         """Fire retain.completed webhook events (one per document). Non-fatal."""
-        if not self._webhook_manager:
+        if not getattr(self, "_webhook_manager", None):
             return
         try:
             from datetime import datetime, timezone
