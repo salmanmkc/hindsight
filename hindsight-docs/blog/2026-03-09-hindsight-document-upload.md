@@ -16,7 +16,7 @@ When you upload a file, you choose how Hindsight processes it:
 
 **Standard extraction** uses [Markitdown](https://github.com/microsoft/markitdown) to pull text from your document. It is free and works well for text-heavy files like PDFs, Word docs, and plain text.
 
-**Enhanced extraction (Iris)** uses AI-powered processing to understand the structure and meaning of your document. This is useful for complex layouts, scanned documents, and images. Iris charges per token processed.
+**Enhanced extraction (Iris)** uses AI-powered processing to understand the structure and meaning of your document. This is useful for complex layouts, scanned documents, and images. Enhanced extraction incurs per-token charges.
 
 Both methods extract the content and store it as structured memories in your bank, ready for recall and reflect queries.
 
